@@ -9,8 +9,12 @@ def main():
     #
     server_socket = socket.create_server(("localhost", 6379), reuse_port=True)
     #server_socket.accept() # wait for client
-    connection, _ = server_socket.accept()
-    connection.sendall(b"+PONG\r\n")
+    connection, addr = server_socket.accept()
+    if connection:
+        while connection:
+            if "PING" in connection.recv(1024).decode():
+                connection.sendall(b"+PONG\r\n")
+    
 
 if __name__ == "__main__":
     main()
