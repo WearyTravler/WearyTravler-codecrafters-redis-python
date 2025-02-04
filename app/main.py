@@ -4,6 +4,16 @@ import logging
 import time
 
 
+class Store:
+    def __init__(self):
+        self.data = {}
+    
+    def set(self, key, value):
+        self.data[key] = value
+    
+    def get(self, key):
+        return self.data.get(key, None)
+
 # Redis Parser
 class RESPParser:
     def parse(self, data):
@@ -57,15 +67,15 @@ def start_server():
     print("Server is running on localhost:6379")
     return server_socket
 
-def accept_connections(server_socket):
+def accept_connections(server_socket, store):
     while True:
         connection, addr = server_socket.accept()
         print(f"Connected by {addr}")
-        client_thread = threading.Thread(target=handle_client, args=(connection, addr))
+        client_thread = threading.Thread(target=handle_client, args=(connection, addr,store)) 
         client_thread.daemon = True
         client_thread.start()
 
-def handle_client(connection, addr):
+def handle_client(connection, addr, store):
     try:
         while True:
             data = connection.recv(1024)
@@ -79,6 +89,15 @@ def handle_client(connection, addr):
                     if parsed_command[0].upper() == "ECHO":
                         message = parsed_command[1]
                         response = f"${len(message)}\r\n{message}\r\n".encode()
+                    elif parsed_command[0].upper() == "SET":
+                        store.set(parsed_command[1], parsed_command[2])
+                        response = b"+OK\r\n"
+                    elif parsed_command[0].upper() == "GET":
+                        value = store.get(parsed_command[1])
+                        if value is None:
+                            response = b"$-1\r\n"
+                        else:
+                            response = f"${len(value)}\r\n{value}\r\n".encode()
                 else:
                     if parsed_command[0].upper() == "PING":
                         response = b"+PONG\r\n"
@@ -98,7 +117,8 @@ def handle_client(connection, addr):
 def main():
     server_socket = start_server()
     try:
-        accept_connections(server_socket)
+        store = Store()
+        accept_connections(server_socket, store)
     except KeyboardInterrupt:
         print("Shutting down the server.")
     finally:
