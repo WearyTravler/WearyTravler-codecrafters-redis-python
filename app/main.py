@@ -8,11 +8,26 @@ class Store:
     def __init__(self):
         self.data = {}
     
-    def set(self, key, value):
-        self.data[key] = value
+    def set(self, key, value,px):
+        expiration = None
+        if px is not None:
+            expiration = time.time() + int(px) / 1000
+
+        self.data[key] = {"value":value, "expiration": expiration}
     
     def get(self, key):
-        return self.data.get(key, None)
+        #return self.data.get(key, None)
+        value = self.data.get(key,None)
+        if value is not None:
+            # check if the key has expired
+            if value["expiration"] is not None and value["expiration"] < time.time():
+                del self.data[key]
+                return None
+            return value["value"]
+        return None
+
+
+
 
 # Redis Parser
 class RESPParser:
@@ -90,7 +105,16 @@ def handle_client(connection, addr, store):
                         message = parsed_command[1]
                         response = f"${len(message)}\r\n{message}\r\n".encode()
                     elif parsed_command[0].upper() == "SET":
-                        store.set(parsed_command[1], parsed_command[2])
+                        exp_time = (
+                            parsed_command[4]
+                            if (
+                                len(parsed_command) > 3
+                                and parsed_command[3].lower() == "px"
+
+                            )
+                            else None 
+                        )
+                        store.set(parsed_command[1], parsed_command[2], exp_time)
                         response = b"+OK\r\n"
                     elif parsed_command[0].upper() == "GET":
                         value = store.get(parsed_command[1])
